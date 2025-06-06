@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:docs.apify.com)",
+      "WebFetch(domain:laravel.com)",
+      "Bash(mkdir:*)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(composer test:*)"
+    ],
+    "deny": []
+  }
+}
