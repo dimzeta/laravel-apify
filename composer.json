@@ -4,7 +4,6 @@
     "type": "library",
     "keywords": ["laravel", "apify", "web-scraping", "automation", "api"],
     "license": "MIT",
-    "version": "0.0.1",
     "authors": [
         {
             "name": "George Daneke",
