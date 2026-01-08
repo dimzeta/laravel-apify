@@ -8,6 +8,8 @@ use Illuminate\Support\Facades\Facade;
 
 /**
  * @method static array runActor(string $actorId, array $input = [], array $options = [])
+ * @method static mixed runActorSync(string $actorId, array $input = [], array $options = [])
+ * @method static array runActorSyncDataset(string $actorId, array $input = [], array $options = [])
  * @method static array getDataset(string $datasetId, array $options = [])
  * @method static mixed getKeyValueStore(string $storeId, string $key)
  * @method static bool setKeyValueStore(string $storeId, string $key, mixed $value, string $contentType = 'application/json')

@@ -86,6 +86,27 @@ $result = Apify::runActor('actor-id', $input, [
 ]);
 ```
 
+### Running Actors Synchronously
+
+For actors that complete in under 5 minutes, use synchronous methods to get results directly:
+
+```php
+// Run actor and get OUTPUT from key-value store
+$output = Apify::runActorSync('actor-id', [
+    'url' => 'https://example.com'
+]);
+
+// Run actor and get dataset items directly
+$items = Apify::runActorSyncDataset('actor-id', [
+    'url' => 'https://example.com'
+], [
+    'fields' => ['title', 'price'],
+    'limit' => 100,
+]);
+```
+
+**Note:** Synchronous endpoints have a 300-second timeout. If your actor takes longer, use `runActor()` with polling instead.
+
 ### Working with Datasets
 
 ```php

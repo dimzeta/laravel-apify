@@ -78,6 +78,196 @@ describe('runActor', function () {
     });
 });
 
+describe('runActorSync', function () {
+    it('can run an actor synchronously and return JSON output', function () {
+        $output = ['result' => 'data', 'items' => [1, 2, 3]];
+
+        $this->mockHandler->append(new Response(200, [
+            'Content-Type' => 'application/json',
+        ], json_encode($output)));
+
+        $result = $this->apifyClient->runActorSync('test-actor', ['url' => 'https://example.com']);
+
+        expect($result)
+            ->toBeArray()
+            ->toHaveKey('result', 'data')
+            ->toHaveKey('items');
+    });
+
+    it('can return non-JSON output', function () {
+        $htmlOutput = '<html><body>Result</body></html>';
+
+        $this->mockHandler->append(new Response(200, [
+            'Content-Type' => 'text/html',
+        ], $htmlOutput));
+
+        $result = $this->apifyClient->runActorSync('test-actor', ['url' => 'https://example.com']);
+
+        expect($result)->toBe($htmlOutput);
+    });
+
+    it('sends input as JSON body', function () {
+        $this->mockHandler->append(new Response(200, [
+            'Content-Type' => 'application/json',
+        ], json_encode(['result' => 'ok'])));
+
+        $input = ['url' => 'https://example.com', 'maxPages' => 10];
+
+        $this->apifyClient->runActorSync('test-actor', $input);
+
+        $lastRequest = $this->mockHandler->getLastRequest();
+        $body = json_decode($lastRequest->getBody()->getContents(), true);
+
+        expect($body)->toBe($input);
+    });
+
+    it('calls the run-sync endpoint', function () {
+        $this->mockHandler->append(new Response(200, [
+            'Content-Type' => 'application/json',
+        ], json_encode(['result' => 'ok'])));
+
+        $this->apifyClient->runActorSync('my-actor', []);
+
+        $lastRequest = $this->mockHandler->getLastRequest();
+
+        expect($lastRequest->getUri()->getPath())->toBe('/v2/acts/my-actor/run-sync');
+    });
+
+    it('does not include waitForFinish in query params', function () {
+        $this->mockHandler->append(new Response(200, [
+            'Content-Type' => 'application/json',
+        ], json_encode(['result' => 'ok'])));
+
+        $this->apifyClient->runActorSync('test-actor', [], ['memory' => 1024]);
+
+        $lastRequest = $this->mockHandler->getLastRequest();
+        $query = $lastRequest->getUri()->getQuery();
+
+        expect($query)->not->toContain('waitForFinish');
+        expect($query)->toContain('memory=1024');
+    });
+
+    it('supports memory, build, and other options', function () {
+        $this->mockHandler->append(new Response(200, [
+            'Content-Type' => 'application/json',
+        ], json_encode(['result' => 'ok'])));
+
+        $options = [
+            'memory' => 2048,
+            'build' => 'latest',
+            'maxItems' => 500,
+        ];
+
+        $this->apifyClient->runActorSync('test-actor', [], $options);
+
+        $lastRequest = $this->mockHandler->getLastRequest();
+        parse_str($lastRequest->getUri()->getQuery(), $queryParams);
+
+        expect($queryParams['memory'])->toBe('2048');
+        expect($queryParams['build'])->toBe('latest');
+        expect($queryParams['maxItems'])->toBe('500');
+    });
+
+    it('throws exception on api error', function () {
+        $this->mockHandler->append(new RequestException(
+            'Timeout',
+            new Request('POST', 'acts/test-actor/run-sync'),
+            new Response(408, [], json_encode(['error' => 'Request timeout']))
+        ));
+
+        expect(fn () => $this->apifyClient->runActorSync('test-actor'))
+            ->toThrow(ApifyException::class, 'Failed to run actor synchronously');
+    });
+});
+
+describe('runActorSyncDataset', function () {
+    it('can run an actor and return dataset items', function () {
+        $items = [
+            ['title' => 'Item 1', 'price' => 10],
+            ['title' => 'Item 2', 'price' => 20],
+        ];
+
+        $this->mockHandler->append(new Response(200, [], json_encode($items)));
+
+        $result = $this->apifyClient->runActorSyncDataset('test-actor', ['url' => 'https://example.com']);
+
+        expect($result)
+            ->toBeArray()
+            ->toHaveCount(2)
+            ->and($result[0])
+            ->toHaveKey('title', 'Item 1');
+    });
+
+    it('calls the run-sync-get-dataset-items endpoint', function () {
+        $this->mockHandler->append(new Response(200, [], json_encode([])));
+
+        $this->apifyClient->runActorSyncDataset('my-actor', []);
+
+        $lastRequest = $this->mockHandler->getLastRequest();
+
+        expect($lastRequest->getUri()->getPath())->toBe('/v2/acts/my-actor/run-sync-get-dataset-items');
+    });
+
+    it('supports format option', function () {
+        $this->mockHandler->append(new Response(200, [], json_encode([])));
+
+        $this->apifyClient->runActorSyncDataset('test-actor', [], ['format' => 'csv']);
+
+        $lastRequest = $this->mockHandler->getLastRequest();
+        parse_str($lastRequest->getUri()->getQuery(), $queryParams);
+
+        expect($queryParams['format'])->toBe('csv');
+    });
+
+    it('supports fields option and joins them with comma', function () {
+        $this->mockHandler->append(new Response(200, [], json_encode([])));
+
+        $this->apifyClient->runActorSyncDataset('test-actor', [], ['fields' => ['title', 'price', 'url']]);
+
+        $lastRequest = $this->mockHandler->getLastRequest();
+        parse_str($lastRequest->getUri()->getQuery(), $queryParams);
+
+        expect($queryParams['fields'])->toBe('title,price,url');
+    });
+
+    it('supports pagination options', function () {
+        $this->mockHandler->append(new Response(200, [], json_encode([])));
+
+        $this->apifyClient->runActorSyncDataset('test-actor', [], [
+            'limit' => 50,
+            'offset' => 100,
+        ]);
+
+        $lastRequest = $this->mockHandler->getLastRequest();
+        parse_str($lastRequest->getUri()->getQuery(), $queryParams);
+
+        expect($queryParams['limit'])->toBe('50');
+        expect($queryParams['offset'])->toBe('100');
+    });
+
+    it('does not include waitForFinish in query params', function () {
+        $this->mockHandler->append(new Response(200, [], json_encode([])));
+
+        $this->apifyClient->runActorSyncDataset('test-actor', [], ['memory' => 1024]);
+
+        $lastRequest = $this->mockHandler->getLastRequest();
+        $query = $lastRequest->getUri()->getQuery();
+
+        expect($query)->not->toContain('waitForFinish');
+    });
+
+    it('throws exception on api error', function () {
+        $this->mockHandler->append(new RequestException(
+            'Timeout',
+            new Request('POST', 'acts/test-actor/run-sync-get-dataset-items'),
+            new Response(408, [], json_encode(['error' => 'Request timeout']))
+        ));
+
+        expect(fn () => $this->apifyClient->runActorSyncDataset('test-actor'))
+            ->toThrow(ApifyException::class, 'Failed to run actor synchronously');
+    });
+});
+
 describe('getDataset', function () {
     it('can retrieve dataset items', function () {
         $mockData = [
