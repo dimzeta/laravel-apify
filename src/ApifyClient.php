@@ -67,18 +67,131 @@ class ApifyClient
     }
 
     /**
+     * Run an actor synchronously and return its OUTPUT from the key-value store.
+     *
+     * This endpoint waits for the actor to finish and returns the OUTPUT record
+     * from the actor's default key-value store. Use this for actors that complete
+     * in under 5 minutes. If the run exceeds 300 seconds, a 408 timeout error will be thrown.
+     *
+     * @param  string  $actorId  The ID or name of the actor (e.g., "apify/web-scraper")
+     * @param  array<string, mixed>  $input  The input data for the actor
+     * @param  array{
+     *     timeout?: int,
+     *     memory?: int,
+     *     build?: string,
+     *     webhooks?: array<array{eventTypes: string[], requestUrl: string}>,
+     *     maxItems?: int,
+     *     maxTotalChargeUsd?: float
+     * }  $options  Query parameters for the API call
+     * @return mixed The OUTPUT record from the actor's default key-value store
+     *
+     * @throws ApifyException|GuzzleException
+     */
+    public function runActorSync(string $actorId, array $input = [], array $options = []): mixed
+    {
+        $queryParams = $this->buildRunActorQueryParams($options, false);
+        $endpoint = "acts/{$actorId}/run-sync";
+
+        if (! empty($queryParams)) {
+            $endpoint .= '?'.http_build_query($queryParams);
+        }
+
+        try {
+            $response = $this->client->post($endpoint, [
+                'json' => $input,
+            ]);
+
+            $contentType = $response->getHeader('Content-Type')[0] ?? '';
+
+            if (str_contains($contentType, 'application/json')) {
+                return json_decode($response->getBody()->getContents(), true);
+            }
+
+            return $response->getBody()->getContents();
+        } catch (RequestException $e) {
+            throw new ApifyException('Failed to run actor synchronously: '.$e->getMessage(), $e->getCode(), $e);
+        }
+    }
+
+    /**
+     * Run an actor synchronously and return its dataset items.
+     *
+     * This endpoint waits for the actor to finish and returns the items from
+     * the actor's default dataset. Use this for actors that complete in under
+     * 5 minutes and store results in a dataset. If the run exceeds 300 seconds,
+     * a 408 timeout error will be thrown.
+     *
+     * @param  string  $actorId  The ID or name of the actor (e.g., "apify/web-scraper")
+     * @param  array<string, mixed>  $input  The input data for the actor
+     * @param  array{
+     *     timeout?: int,
+     *     memory?: int,
+     *     build?: string,
+     *     webhooks?: array<array{eventTypes: string[], requestUrl: string}>,
+     *     maxItems?: int,
+     *     maxTotalChargeUsd?: float,
+     *     format?: string,
+     *     fields?: string[],
+     *     limit?: int,
+     *     offset?: int
+     * }  $options  Query parameters for the API call
+     * @return array<mixed> The dataset items
+     *
+     * @throws ApifyException|GuzzleException
+     */
+    public function runActorSyncDataset(string $actorId, array $input = [], array $options = []): array
+    {
+        $queryParams = $this->buildRunActorQueryParams($options, false);
+
+        // Add dataset-specific options
+        if (isset($options['format'])) {
+            $queryParams['format'] = $options['format'];
+        }
+        if (isset($options['fields'])) {
+            $queryParams['fields'] = implode(',', $options['fields']);
+        }
+        if (isset($options['limit'])) {
+            $queryParams['limit'] = $options['limit'];
+        }
+        if (isset($options['offset'])) {
+            $queryParams['offset'] = $options['offset'];
+        }
+
+        $endpoint = "acts/{$actorId}/run-sync-get-dataset-items";
+
+        if (! empty($queryParams)) {
+            $endpoint .= '?'.http_build_query($queryParams);
+        }
+
+        try {
+            $response = $this->client->post($endpoint, [
+                'json' => $input,
+            ]);
+
+            return json_decode($response->getBody()->getContents(), true);
+        } catch (RequestException $e) {
+            throw new ApifyException('Failed to run actor synchronously: '.$e->getMessage(), $e->getCode(), $e);
+        }
+    }
+
+    /**
      * Build query parameters for the run actor endpoint.
      *
      * @param  array<string, mixed>  $options  Raw options
-     * @return array<string, mixed>  Filtered and formatted query params
+     * @param  bool  $includeWaitForFinish  Whether to include waitForFinish param (not used for sync endpoints)
+     * @return array<string, mixed> Filtered and formatted query params
      */
-    private function buildRunActorQueryParams(array $options): array
+    private function buildRunActorQueryParams(array $options, bool $includeWaitForFinish = true): array
     {
         $supported = ['waitForFinish', 'timeout', 'memory', 'build', 'webhooks', 'maxItems', 'maxTotalChargeUsd'];
         $params = [];
 
         foreach ($supported as $key) {
             if (! isset($options[$key])) {
+                continue;
+            }
+
+            if ($key === 'waitForFinish' && ! $includeWaitForFinish) {
                 continue;
             }
 
@@ -91,7 +204,9 @@ class ApifyClient
             $params[$key] = $value;
         }
 
-        $params['waitForFinish'] ??= 60;
+        if ($includeWaitForFinish) {
+            $params['waitForFinish'] ??= 60;
+        }
 
         return $params;
     }

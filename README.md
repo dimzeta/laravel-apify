@@ -74,7 +74,7 @@ class ScrapingService
 ### Running Actors
 
 ```php
-// Run an actor and wait for completion
+// Run an actor and wait for completion (returns run metadata)
 $result = Apify::runActor('actor-id', $input, [
     'waitForFinish' => 60, // seconds
     'memory' => 512,       // MB
@@ -85,6 +85,27 @@ $result = Apify::runActor('actor-id', $input, [
     'waitForFinish' => 0
 ]);
 ```
+
+### Running Actors Synchronously
+
+For actors that complete in under 5 minutes, use synchronous methods to get results directly:
+
+```php
+// Run actor and get OUTPUT from key-value store
+$output = Apify::runActorSync('actor-id', [
+    'url' => 'https://example.com'
+]);
+
+// Run actor and get dataset items directly
+$items = Apify::runActorSyncDataset('actor-id', [
+    'url' => 'https://example.com'
+], [
+    'fields' => ['title', 'price'],
+    'limit' => 100,
+]);
+```
+
+**Note:** Synchronous endpoints have a 300-second timeout. If your actor takes longer, use `runActor()` with polling instead.
 
 ### Working with Datasets
 
