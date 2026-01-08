@@ -9,6 +9,7 @@ describe('Architecture', function () {
             'Illuminate\Support\Facades\App',
             'Illuminate\Support\Facades\Config',
             'Illuminate\Support\Facades\Cache',
+            'Illuminate\Support\Facades\Log',
         ]);
 
     test('facades extend Facade')

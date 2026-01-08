@@ -7,7 +7,6 @@ namespace Apify\Laravel;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
 use GuzzleHttp\Exception\RequestException;
-use Illuminate\Support\Facades\Log;
 
 class ApifyClient
 {
@@ -37,30 +36,64 @@ class ApifyClient
     /**
      * Run an actor on the Apify platform.
      *
+     * @param  string  $actorId  The ID or name of the actor (e.g., "apify/web-scraper")
+     * @param  array<string, mixed>  $input  The input data for the actor
+     * @param  array{
+     *     waitForFinish?: int,
+     *     timeout?: int,
+     *     memory?: int,
+     *     build?: string,
+     *     webhooks?: array<array{eventTypes: string[], requestUrl: string}>,
+     *     maxItems?: int,
+     *     maxTotalChargeUsd?: float
+     * }  $options  Query parameters for the API call
+     *
      * @throws ApifyException|GuzzleException
      */
     public function runActor(string $actorId, array $input = [], array $options = []): array
     {
-        $waitForFinish = $options['waitForFinish'] ?? 60;
-        $endpoint = "acts/{$actorId}/runs?waitForFinish={$waitForFinish}";
-
-        $payload = $options;
-
-        // merge payload with input
-        if (! empty($input)) {
-            $payload = array_merge($payload, $input);
-        }
+        $queryParams = $this->buildRunActorQueryParams($options);
+        $endpoint = "acts/{$actorId}/runs?".http_build_query($queryParams);
 
         try {
             $response = $this->client->post($endpoint, [
-                'json' => $payload,
+                'json' => $input,
             ]);
 
             return json_decode($response->getBody()->getContents(), true);
         } catch (RequestException $e) {
-            Log::error('Apify API error: '.$e->getMessage());
             throw new ApifyException('Failed to run actor: '.$e->getMessage(), $e->getCode(), $e);
         }
+    }
+
+    /**
+     * Build query parameters for the run actor endpoint.
+     *
+     * @param  array<string, mixed>  $options  Raw options
+     * @return array<string, mixed>  Filtered and formatted query params
+     */
+    private function buildRunActorQueryParams(array $options): array
+    {
+        $supported = ['waitForFinish', 'timeout', 'memory', 'build', 'webhooks', 'maxItems', 'maxTotalChargeUsd'];
+        $params = [];
+
+        foreach ($supported as $key) {
+            if (! isset($options[$key])) {
+                continue;
+            }
+
+            $value = $options[$key];
+
+            if ($key === 'webhooks' && is_array($value)) {
+                $value = base64_encode(json_encode($value));
+            }
+
+            $params[$key] = $value;
+        }
+
+        $params['waitForFinish'] ??= 60;
+
+        return $params;
     }
 
     public function getDataset(string $datasetId, array $options = []): array
@@ -81,7 +114,6 @@ class ApifyClient
 
             return json_decode($response->getBody()->getContents(), true);
         } catch (RequestException $e) {
-            Log::error('Apify API error: '.$e->getMessage());
             throw new ApifyException('Failed to get dataset: '.$e->getMessage(), $e->getCode(), $e);
         }
     }
@@ -100,7 +132,6 @@ class ApifyClient
 
             return $response->getBody()->getContents();
         } catch (RequestException $e) {
-            Log::error('Apify API error: '.$e->getMessage());
             throw new ApifyException('Failed to get key-value store: '.$e->getMessage(), $e->getCode(), $e);
         }
     }
@@ -130,7 +161,6 @@ class ApifyClient
 
             return $response->getStatusCode() === 201;
         } catch (RequestException $e) {
-            Log::error('Apify API error: '.$e->getMessage());
             throw new ApifyException('Failed to set key-value store: '.$e->getMessage(), $e->getCode(), $e);
         }
     }
@@ -144,7 +174,6 @@ class ApifyClient
 
             return json_decode($response->getBody()->getContents(), true);
         } catch (RequestException $e) {
-            Log::error('Apify API error: '.$e->getMessage());
             throw new ApifyException('Failed to get actor run: '.$e->getMessage(), $e->getCode(), $e);
         }
     }
@@ -158,7 +187,6 @@ class ApifyClient
 
             return json_decode($response->getBody()->getContents(), true);
         } catch (RequestException $e) {
-            Log::error('Apify API error: '.$e->getMessage());
             throw new ApifyException('Failed to abort actor run: '.$e->getMessage(), $e->getCode(), $e);
         }
     }
@@ -172,7 +200,6 @@ class ApifyClient
 
             return json_decode($response->getBody()->getContents(), true);
         } catch (RequestException $e) {
-            Log::error('Apify API error: '.$e->getMessage());
             throw new ApifyException('Failed to get user info: '.$e->getMessage(), $e->getCode(), $e);
         }
     }
@@ -194,7 +221,6 @@ class ApifyClient
 
             return json_decode($response->getBody()->getContents(), true);
         } catch (RequestException $e) {
-            Log::error('Apify API error: '.$e->getMessage());
             throw new ApifyException('Failed to list actors: '.$e->getMessage(), $e->getCode(), $e);
         }
     }

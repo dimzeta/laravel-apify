@@ -76,6 +76,108 @@ describe('runActor', function () {
         expect(fn () => $this->apifyClient->runActor('invalid-actor'))
             ->toThrow(ApifyException::class, 'Failed to run actor');
     });
+
+    it('sends input as JSON body only without options', function () {
+        $this->mockHandler->append(new Response(200, [], json_encode([
+            'data' => ['id' => 'run-123'],
+        ])));
+
+        $input = ['url' => 'https://example.com', 'maxPages' => 10];
+        $options = ['waitForFinish' => 120, 'memory' => 1024];
+
+        $this->apifyClient->runActor('test-actor', $input, $options);
+
+        $lastRequest = $this->mockHandler->getLastRequest();
+        $body = json_decode($lastRequest->getBody()->getContents(), true);
+
+        expect($body)->toBe($input);
+        expect($body)->not->toHaveKey('waitForFinish');
+        expect($body)->not->toHaveKey('memory');
+    });
+
+    it('includes all supported options as query parameters', function () {
+        $this->mockHandler->append(new Response(200, [], json_encode([
+            'data' => ['id' => 'run-123'],
+        ])));
+
+        $options = [
+            'waitForFinish' => 120,
+            'timeout' => 300,
+            'memory' => 2048,
+            'build' => 'latest',
+            'maxItems' => 1000,
+            'maxTotalChargeUsd' => 5.0,
+        ];
+
+        $this->apifyClient->runActor('test-actor', [], $options);
+
+        $lastRequest = $this->mockHandler->getLastRequest();
+        $uri = $lastRequest->getUri();
+
+        parse_str($uri->getQuery(), $queryParams);
+
+        expect($queryParams['waitForFinish'])->toBe('120');
+        expect($queryParams['timeout'])->toBe('300');
+        expect($queryParams['memory'])->toBe('2048');
+        expect($queryParams['build'])->toBe('latest');
+        expect($queryParams['maxItems'])->toBe('1000');
+        expect($queryParams['maxTotalChargeUsd'])->toBe('5');
+    });
+
+    it('encodes webhooks as base64 JSON in query parameter', function () {
+        $this->mockHandler->append(new Response(200, [], json_encode([
+            'data' => ['id' => 'run-123'],
+        ])));
+
+        $webhooks = [
+            [
+                'eventTypes' => ['ACTOR.RUN.SUCCEEDED'],
+                'requestUrl' => 'https://myapp.com/webhook',
+            ],
+        ];
+
+        $this->apifyClient->runActor('test-actor', [], ['webhooks' => $webhooks]);
+
+        $lastRequest = $this->mockHandler->getLastRequest();
+        parse_str($lastRequest->getUri()->getQuery(), $queryParams);
+
+        $decodedWebhooks = json_decode(base64_decode($queryParams['webhooks']), true);
+
+        expect($decodedWebhooks)->toBe($webhooks);
+    });
+
+    it('uses default waitForFinish of 60 when not specified', function () {
+        $this->mockHandler->append(new Response(200, [], json_encode([
+            'data' => ['id' => 'run-123'],
+        ])));
+
+        $this->apifyClient->runActor('test-actor', ['url' => 'https://example.com']);
+
+        $lastRequest = $this->mockHandler->getLastRequest();
+        parse_str($lastRequest->getUri()->getQuery(), $queryParams);
+
+        expect($queryParams['waitForFinish'])->toBe('60');
+    });
+
+    it('does not include unknown options in query parameters', function () {
+        $this->mockHandler->append(new Response(200, [], json_encode([
+            'data' => ['id' => 'run-123'],
+        ])));
+
+        $options = [
+            'waitForFinish' => 60,
+            'unknownOption' => 'value',
+            'anotherUnknown' => 123,
+        ];
+
+        $this->apifyClient->runActor('test-actor', [], $options);
+
+        $lastRequest = $this->mockHandler->getLastRequest();
+        parse_str($lastRequest->getUri()->getQuery(), $queryParams);
+
+        expect($queryParams)->not->toHaveKey('unknownOption');
+        expect($queryParams)->not->toHaveKey('anotherUnknown');
+    });
 });
 
 describe('getDataset', function () {
